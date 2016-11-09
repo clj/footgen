@@ -38,6 +38,44 @@ class Footgen(object):
         self.add_pad = self.generator.add_pad
         self.silk_line = self.generator.silk_line
 
+    def _pin_parser(self, pins):
+        spans = pins.split(',')
+        for span in spans:
+            if '-' in span:
+                assert span.count('-') == 1
+                assert span.count(':') <= 1
+                assert span.find('-') < span.find(':') if ':' in span else True
+                range_args = [int(s.strip()) for s in span.split('-:')]
+                for i in range(*range_args):
+                    yield i
+            else:
+                if span.strip() == 'x':
+                    yield None
+                else:
+                    yield int(span.strip())
+
+    def _pin_names(self, pins, *args, **kwargs):
+        start = kwargs.pop('start', 1)
+
+        def offset(args):
+            # Adjust for the fact that things are `start` indexed
+            return tuple(a-1 for a in args[0:2]) + args[2:]
+
+        if pins is None:
+            assert len(args) > 1 and len(args) <= 3
+            return range(*args)
+        elif isinstance(pins, (str, basestring)):
+            pins = list(self._pin_parser(pins))
+
+        assert len(args) <= 3
+        if args:
+            return pins[slice(*offset(args))]
+        else:
+            return pins
+
+    def _pin_name(self, pins, index, start=1):
+        return self._pin_names(pins, index + start, start=start)[-1]
+
     def finish(self):
         fp = self.generator.finish()
         with open(self.name, "w") as f:
@@ -289,7 +327,7 @@ class Footgen(object):
                      padwidth = padwidth,
                      padheight = padheight)
 
-    def tabbed(self, pitch, pins, padwidth, padheight, tabwidth, tabheight, height):
+    def tabbed(self, pitch, pins, padwidth, padheight, tabwidth, tabheight, height, pin_names=None):
         """ generate a part with a tab such as SOT-223 """
         totalheight = height+tabheight+padheight
         totalwidth = max(tabwidth, (pins-1)*pitch+padwidth)
@@ -298,14 +336,17 @@ class Footgen(object):
         rowlen = pitch * (pins - 1)
         x = 0 - rowlen*0.5
         y = padsy
-        for padnum in range (1, 1+pins):
+        for padnum in self._pin_names(pin_names, 1, 1+pins):
+            if padnum is None:
+                continue
             self.add_pad(name = str(padnum),
                          x = x,
                          y = y,
                          xsize = padwidth,
                          ysize = padheight)
             x += pitch
-        self.add_pad(name = str(pins+1),
+        padnum = self._pin_name(pin_names, pins+1)
+        self.add_pad(name = str(padnum),
                      x = 0,
                      y = taby,
                      xsize = tabwidth,
@@ -320,32 +361,35 @@ class Footgen(object):
             pin1shape="square",
             draw_silk=True,
             silkboxwidth = 0,
-            silkboxheight = 0):
+            silkboxheight = 0,
+            pin_names = None):
         """ DIP and headers, set width to 0 and pincount to 2x the desired for SIP"""
         y = -(pins*0.5-1.0)*pitch*0.5
         x = width*-0.5
         shape = 'rect' if pin1shape=='square' else 'circle'
-        for pinnum in range (1,1+pins/2):
-            self.add_pad(name = str(pinnum),
-                         x = x,
-                         y = y,
-                         xsize = diameter,
-                         ysize = diameter,
-                         diameter = diameter,
-                         drill = drill,
-                         shape = shape)
+        for pinnum in self._pin_names(pin_names, 1, 1+pins/2):
+            if pinnum is not None:
+                self.add_pad(name = str(pinnum),
+                             x = x,
+                             y = y,
+                             xsize = diameter,
+                             ysize = diameter,
+                             diameter = diameter,
+                             drill = drill,
+                             shape = shape)
             shape = 'circle'
             y += pitch
         y -= pitch
         x *= -1
         if width != 0:
-            for pinnum in range (1+pins/2, pins+1):
-                self.add_pad(name = str(pinnum),
-                             x = x,
-                             y = y,
-                             drill = drill,
-                             diameter = diameter,
-                             shape = 'circle')
+            for pinnum in self._pin_names(pin_names, 1+pins/2, pins+1):
+                if pinnum is not None:
+                    self.add_pad(name = str(pinnum),
+                                 x = x,
+                                 y = y,
+                                 drill = drill,
+                                 diameter = diameter,
+                                 shape = 'circle')
                 y -= pitch
         if draw_silk == False:
             return

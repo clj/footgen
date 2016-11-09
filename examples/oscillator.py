@@ -15,7 +15,6 @@ f.so(pitch = 5.08, pins = 4, width = 4.83, padheight = 1.27, padwidth = 2.28)
 f.finish()
 
 # 1x1" 5 pin OCXO package
-# need to delete pin 5, nename pin 6 to 5 after generation
 f = Footgen("OCXO_1")
-f.dip(pitch = 9.52, pins = 6, drill = 1.1, diameter = 2.0, width = 19.05, silkboxwidth = 25.4, silkboxheight = 25.4)
+f.dip(pitch = 9.52, pins = 6, drill = 1.1, diameter = 2.0, width = 19.05, silkboxwidth = 25.4, silkboxheight = 25.4, pin_names="1-4,x,5")
 f.finish()
